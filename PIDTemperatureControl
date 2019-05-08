@@ -1,0 +1,89 @@
+#include <PID_v1.h>
+float Vo;
+float Vp;
+float temp;
+float Dtemp;
+float Dsum = 0;
+float t[] = {0, 0, 0, 0, 0};
+float Dt[] = {0, 0, 0, 0, 0};
+int x;
+int n = 0;
+int i;
+float sum = 0;
+// Tuning parameters
+float Kp = 64; //Initial Proportional Gain
+float Ki = 4; //Initial Integral Gain
+float Kd = 12; //Initial Differential Gain
+double Setpoint, Input, Output; //These are just variables for storingvalues
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
+// This sets up our PDID Loop
+//Input is our PV
+//Output is our u(t)
+//Setpoint is our SP
+const int sampleRate = 1000; // Variable that determines how fast our PID loop
+
+void setup() {
+  Serial.begin(9600); //Start a serial session
+  myPID.SetMode(AUTOMATIC); //Turn on the PID loop
+  myPID.SetSampleTime(sampleRate); //Sets the sample rate
+
+}
+void loop() {
+  t[n] = analogRead(A0);
+  Dt[n] = analogRead(A1);
+
+  for (i = 0; i <= 4; i++)
+  {
+    sum = sum + t[i];
+    Dsum = Dsum + Dt[i];
+  }
+  Vo = sum / 5;
+  Vp = Dsum / 5;
+  sum = 0;
+  Dsum = 0;
+  n = n + 1;
+  if (n >= 5)
+  {
+    n = 0;
+  }
+  temp = (((Vo / 1023) * 5) / 0.01);
+  Dtemp = ((Vp / 1023) * 5) / 0.01;
+  Input = map(Vo, 0, 1023, 0, 255); //Change read scale to analog
+  Setpoint = map(Vp, 0, 1023, 0, 255);
+  myPID.Compute(); //Run the PID loop
+  if (Output >= 10 && Output <= 100)
+  {
+    kick();
+    Output = 50;
+  }
+  else if (Output > 90)
+  {
+    Output = Output;
+  }
+  else if (Output < 10)
+  {
+    Output = 0;
+  }
+  analogWrite(13, Output); //Write out the output from the
+  Serial.print("Setpoint = ");
+  Serial.print(Setpoint);
+  Serial.print(" Input = ");
+  Serial.print(Input);
+  Serial.print(" Output = ");
+  Serial.print(Output);
+  Serial.print(" Temp = ");
+  Serial.print(temp);
+  Serial.print(" Desired = ");
+  Serial.print(Dtemp);
+  Serial.print(" Difference: ");
+  Serial.print(temp - Dtemp);
+  Serial.print("\n");
+
+}
+
+int kick()
+{
+  Output = 255;
+  analogWrite(13, Output);
+  delay(20);
+}
