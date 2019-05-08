@@ -1,89 +1,86 @@
 #include <PID_v1.h>
-float Vo;
-float Vp;
-float temp;
-float Dtemp;
-float Dsum = 0;
-float t[] = {0, 0, 0, 0, 0};
-float Dt[] = {0, 0, 0, 0, 0};
-int x;
-int n = 0;
-int i;
-float sum = 0;
+float Vo; //Voltage from PTAT
+float Vp; //Voltage from Pot
+float temp; //Temperature Measurement
+float Dtemp; //Desire Temperature
+float Dsum = 0; //Desired summing for averager filter
+float t[] = {0, 0, 0, 0, 0}; //Samples of measured temperature
+float Dt[] = {0, 0, 0, 0, 0}; //Samples of desired temperature determined by Potentiometer
+
+int n = 0; //Variable goes through arrays for averager filter
+int i; //for loop
+float sum = 0; //Sum of Measure temperature for averager filter
 // Tuning parameters
-float Kp = 64; //Initial Proportional Gain
-float Ki = 4; //Initial Integral Gain
-float Kd = 12; //Initial Differential Gain
+float Kp = 64; //Set Kp of PID
+float Ki = 4; //Set Ki of PID
+float Kd = 12; //Set Kd of PID
 double Setpoint, Input, Output; //These are just variables for storingvalues
-PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE);
-// This sets up our PDID Loop
-//Input is our PV
-//Output is our u(t)
-//Setpoint is our SP
-const int sampleRate = 1000; // Variable that determines how fast our PID loop
+PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, REVERSE); //Setting PID controller variables (Input of temperature sensor, Output of PWM, Setpoint desired temperature for potentiometer, Kp, Ki, Kd, Relation from Input to Setpoint determining output)
+
+const int sampleRate = 1000; // Determines speed of PID loop
 
 void setup() {
-  Serial.begin(9600); //Start a serial session
-  myPID.SetMode(AUTOMATIC); //Turn on the PID loop
+  Serial.begin(9600);
+  myPID.SetMode(AUTOMATIC); //Activates PID loop
   myPID.SetSampleTime(sampleRate); //Sets the sample rate
 
 }
 void loop() {
-  t[n] = analogRead(A0);
-  Dt[n] = analogRead(A1);
+  t[n] = analogRead(A0); //ADC Measured temp
+  Dt[n] = analogRead(A1); //ADC Desired temp
 
-  for (i = 0; i <= 4; i++)
+  for (i = 0; i <= 4; i++) //Summing arrays for averager
   {
-    sum = sum + t[i];
-    Dsum = Dsum + Dt[i];
+    sum = sum + t[i]; //Measured temp array
+    Dsum = Dsum + Dt[i]; //Desired temp array
   }
-  Vo = sum / 5;
-  Vp = Dsum / 5;
-  sum = 0;
+  Vo = sum / 5; //Averages from last five samples of Measured temp
+  Vp = Dsum / 5; //Averages last five samples from desired temp
+  sum = 0; //Sets sums back to 0
   Dsum = 0;
-  n = n + 1;
-  if (n >= 5)
+  n = n + 1; //Goes through adds sample to array
+  if (n >= 5) //Only takes 5 samples then resets changing less recent taken samples
   {
     n = 0;
   }
-  temp = (((Vo / 1023) * 5) / 0.01);
-  Dtemp = ((Vp / 1023) * 5) / 0.01;
+  temp = (((Vo / 1023) * 5) / 0.01); //Conversion from ADC 1023-10 bit conversion, 5- 5V supplied voltage, 0.01 Conversion given by PTAT Datasheet
+  Dtemp = ((Vp / 1023) * 5) / 0.01; //Conversion from ADC same to make PTAT and Pot equivalent simplifying desired temperature readings
   Input = map(Vo, 0, 1023, 0, 255); //Change read scale to analog
   Setpoint = map(Vp, 0, 1023, 0, 255);
-  myPID.Compute(); //Run the PID loop
-  if (Output >= 10 && Output <= 100)
+  myPID.Compute(); //Runs PID loop
+  if (Output >= 10 && Output <= 90) //Low Output setting solution
   {
-    kick();
+    kick(); //Increases inertia making low PWM duty cycles possible
     Output = 50;
   }
-  else if (Output > 90)
+  else if (Output > 90) //If higher PWM sets to Output value
   {
     Output = Output;
   }
-  else if (Output < 10)
+  else if (Output < 10) //If very low or 0 sets PWM to 0% Duty Cycle
   {
     Output = 0;
   }
-  analogWrite(13, Output); //Write out the output from the
-  Serial.print("Setpoint = ");
+  analogWrite(13, Output); //PWM control for fan
+  Serial.print("Setpoint = "); //Displays Setpoint
   Serial.print(Setpoint);
-  Serial.print(" Input = ");
+  Serial.print(" Input = "); //Displays Input
   Serial.print(Input);
-  Serial.print(" Output = ");
+  Serial.print(" Output = "); //Displays Outputs
   Serial.print(Output);
-  Serial.print(" Temp = ");
+  Serial.print(" Temp = "); //Displays Measured Temperature
   Serial.print(temp);
-  Serial.print(" Desired = ");
+  Serial.print(" Desired = "); //Displayes Desired Temperature from potentiometer
   Serial.print(Dtemp);
-  Serial.print(" Difference: ");
-  Serial.print(temp - Dtemp);
+  Serial.print(" Difference: "); //Displays difference between Desired and Measured temperature
+  Serial.print(temp - Dtemp); //Difference Calculation between temperautes
   Serial.print("\n");
 
 }
 
-int kick()
+int kick() //Gives fan kick inorder to use lower PWM
 {
-  Output = 255;
+  Output = 255; //100% Duty cycle
   analogWrite(13, Output);
   delay(20);
 }
